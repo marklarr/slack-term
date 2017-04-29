@@ -3,6 +3,8 @@ package service
 import (
 	"fmt"
 	"log"
+	"os"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -58,6 +60,18 @@ func NewSlackService(token string) *SlackService {
 	return svc
 }
 
+// If CHANNEL_PATTERN env variable is defined, filter on only channels
+// matching the pattern.
+func isChannelNamePatternMatching(channelName string) bool {
+	var channelRegexString, regexDefined = os.LookupEnv("CHANNEL_PATTERN")
+	if !regexDefined {
+		return true
+	}
+
+	var channelRegex = regexp.MustCompile(channelRegexString)
+	return channelRegex.MatchString(channelName)
+}
+
 // GetChannels will retrieve all available channels, groups, and im channels.
 // Because the channels are of different types, we will append them to
 // an []interface as well as to a []Channel which will give us easy access
@@ -71,8 +85,10 @@ func (s *SlackService) GetChannels() []Channel {
 		chans = append(chans, Channel{})
 	}
 	for _, chn := range slackChans {
-		s.SlackChannels = append(s.SlackChannels, chn)
-		chans = append(chans, Channel{chn.ID, chn.Name, chn.Topic.Value})
+		if isChannelNamePatternMatching(chn.Name) {
+			s.SlackChannels = append(s.SlackChannels, chn)
+			chans = append(chans, Channel{chn.ID, chn.Name, chn.Topic.Value})
+		}
 	}
 
 	// Groups
@@ -81,8 +97,10 @@ func (s *SlackService) GetChannels() []Channel {
 		chans = append(chans, Channel{})
 	}
 	for _, grp := range slackGroups {
-		s.SlackChannels = append(s.SlackChannels, grp)
-		chans = append(chans, Channel{grp.ID, grp.Name, grp.Topic.Value})
+		if isChannelNamePatternMatching(grp.Name) {
+			s.SlackChannels = append(s.SlackChannels, grp)
+			chans = append(chans, Channel{grp.ID, grp.Name, grp.Topic.Value})
+		}
 	}
 
 	// IM
@@ -98,8 +116,10 @@ func (s *SlackService) GetChannels() []Channel {
 		// to the UserCache, so we skip it
 		name, ok := s.UserCache[im.User]
 		if ok {
-			chans = append(chans, Channel{im.ID, name, ""})
-			s.SlackChannels = append(s.SlackChannels, im)
+			if isChannelNamePatternMatching(name) {
+				chans = append(chans, Channel{im.ID, name, ""})
+				s.SlackChannels = append(s.SlackChannels, im)
+			}
 		}
 	}
 
